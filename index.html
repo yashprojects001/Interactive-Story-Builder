@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Advanced Interactive Story</title>
+
+<style>
+/* ===== GLOBAL STYLES ===== */
+body {
+    margin: 0;
+    font-family: 'Segoe UI', sans-serif;
+    background: black;
+    color: white;
+    overflow: hidden;
+}
+
+/* Animated background */
+canvas {
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: -1;
+}
+
+/* Container */
+.container {
+    width: 800px;
+    max-width: 95%;
+    margin: auto;
+    margin-top: 40px;
+    padding: 20px;
+    background: rgba(0,0,0,0.7);
+    border-radius: 15px;
+    box-shadow: 0 0 30px rgba(0,255,255,0.2);
+}
+
+/* Header */
+.header {
+    display: flex;
+    justify-content: space-between;
+}
+
+/* Story */
+#story {
+    margin: 20px 0;
+    font-size: 18px;
+    min-height: 120px;
+}
+
+/* Choices */
+button {
+    width: 100%;
+    margin: 8px 0;
+    padding: 12px;
+    border: none;
+    border-radius: 8px;
+    background: cyan;
+    cursor: pointer;
+    transition: 0.3s;
+}
+button:hover {
+    background: blue;
+    color: white;
+}
+
+/* Progress */
+.progress {
+    height: 8px;
+    background: gray;
+    margin-top: 10px;
+}
+.progress-bar {
+    height: 100%;
+    width: 0%;
+    background: lime;
+}
+
+/* Inventory */
+.inventory {
+    margin-top: 10px;
+    font-size: 14px;
+}
+
+/* Health */
+.health {
+    color: red;
+}
+
+/* Toggle */
+.toggle {
+    cursor: pointer;
+}
+</style>
+</head>
+
+<body>
+
+<canvas id="bg"></canvas>
+
+<div class="container">
+    <div class="header">
+        <div>🎭 Story Game</div>
+        <div>
+            <span class="toggle" onclick="toggleTheme()">🌙</span>
+        </div>
+    </div>
+
+    <div class="health">❤️ Health: <span id="health">100</span></div>
+    <div class="inventory">🎒 Inventory: <span id="inventory">None</span></div>
+
+    <div id="story"></div>
+    <div id="choices"></div>
+
+    <div class="progress">
+        <div class="progress-bar" id="progress"></div>
+    </div>
+
+    <button onclick="saveGame()">💾 Save</button>
+    <button onclick="loadGame()">📂 Load</button>
+</div>
+
+<audio id="bgm" loop>
+    <source src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3">
+</audio>
+
+<script>
+/* ===== BACKGROUND PARTICLES ===== */
+const canvas = document.getElementById("bg");
+const ctx = canvas.getContext("2d");
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+
+let particles = [];
+for(let i=0;i<100;i++){
+    particles.push({
+        x: Math.random()*canvas.width,
+        y: Math.random()*canvas.height,
+        r: Math.random()*2
+    });
+}
+
+function animateBG(){
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    ctx.fillStyle = "cyan";
+    particles.forEach(p=>{
+        ctx.beginPath();
+        ctx.arc(p.x,p.y,p.r,0,Math.PI*2);
+        ctx.fill();
+        p.y += 0.5;
+        if(p.y>canvas.height) p.y=0;
+    });
+    requestAnimationFrame(animateBG);
+}
+animateBG();
+
+/* ===== GAME STATE ===== */
+let health = 100;
+let inventory = [];
+let progress = 0;
+
+/* ===== STORY DATA ===== */
+const story = {
+    start: {
+        text: "You wake up in a dark futuristic forest...",
+        choices: [
+            {text:"Explore cave", next:"cave", effect:()=>health-=10},
+            {text:"Follow light", next:"light", effect:()=>inventory.push("Orb")}
+        ]
+    },
+
+    cave: {
+        text: "Inside cave you find a monster!",
+        choices: [
+            {text:"Fight", next:"fight"},
+            {text:"Run", next:"start"}
+        ]
+    },
+
+    fight: {
+        text: "You defeat the monster and gain treasure 🏆",
+        choices: []
+    },
+
+    light: {
+        text: "The light gives you power ✨",
+        choices: []
+    }
+};
+
+let current = "start";
+
+/* ===== TYPEWRITER EFFECT ===== */
+function typeText(text, element){
+    element.innerHTML = "";
+    let i=0;
+    let interval = setInterval(()=>{
+        element.innerHTML += text[i];
+        i++;
+        if(i>=text.length) clearInterval(interval);
+    },20);
+}
+
+/* ===== LOAD SCENE ===== */
+function loadScene(scene){
+    const s = story[scene];
+    current = scene;
+
+    typeText(s.text, document.getElementById("story"));
+
+    const choicesDiv = document.getElementById("choices");
+    choicesDiv.innerHTML = "";
+
+    progress += 10;
+    document.getElementById("progress").style.width = progress+"%";
+
+    s.choices.forEach(c=>{
+        const btn = document.createElement("button");
+        btn.innerText = c.text;
+        btn.onclick = ()=>{
+            if(c.effect) c.effect();
+            updateStats();
+            loadScene(c.next);
+        };
+        choicesDiv.appendChild(btn);
+    });
+
+    if(s.choices.length===0){
+        const end = document.createElement("button");
+        end.innerText = "Restart";
+        end.onclick = ()=>location.reload();
+        choicesDiv.appendChild(end);
+    }
+}
+
+/* ===== UPDATE UI ===== */
+function updateStats(){
+    document.getElementById("health").innerText = health;
+    document.getElementById("inventory").innerText = inventory.join(", ") || "None";
+}
+
+/* ===== SAVE / LOAD ===== */
+function saveGame(){
+    const data = {health, inventory, current, progress};
+    localStorage.setItem("storySave", JSON.stringify(data));
+    alert("Game Saved!");
+}
+
+function loadGame(){
+    const data = JSON.parse(localStorage.getItem("storySave"));
+    if(!data) return alert("No save found");
+    health = data.health;
+    inventory = data.inventory;
+    current = data.current;
+    progress = data.progress;
+    updateStats();
+    loadScene(current);
+}
+
+/* ===== THEME TOGGLE ===== */
+function toggleTheme(){
+    document.body.style.background =
+        document.body.style.background==="white" ? "black" : "white";
+}
+
+/* ===== START ===== */
+document.getElementById("bgm").play();
+loadScene(current);
+updateStats();
+
+/* ===== KEYBOARD CONTROLS ===== */
+document.addEventListener("keydown", e=>{
+    if(e.key==="1") document.querySelectorAll("button")[0]?.click();
+    if(e.key==="2") document.querySelectorAll("button")[1]?.click();
+});
+</script>
+
+</body>
+</html>
